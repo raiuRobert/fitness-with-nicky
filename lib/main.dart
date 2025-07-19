@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 void main() {
   runApp(const FitnessWithNickyApp());
@@ -18,8 +19,272 @@ class FitnessWithNickyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const LandingPage(),
+      home: const InteractiveCatWrapper(child: LandingPage()),
     );
+  }
+}
+
+class InteractiveCatWrapper extends StatefulWidget {
+  final Widget child;
+  
+  const InteractiveCatWrapper({super.key, required this.child});
+
+  @override
+  State<InteractiveCatWrapper> createState() => _InteractiveCatWrapperState();
+}
+
+class _InteractiveCatWrapperState extends State<InteractiveCatWrapper>
+    with TickerProviderStateMixin {
+  Offset? lastClickPosition;
+  late AnimationController _eyeController;
+  late Animation<double> _leftEyeX;
+  late Animation<double> _leftEyeY;
+  late Animation<double> _rightEyeX;
+  late Animation<double> _rightEyeY;
+
+  @override
+  void initState() {
+    super.initState();
+    _eyeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _leftEyeX = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _eyeController, curve: Curves.easeOut),
+    );
+    _leftEyeY = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _eyeController, curve: Curves.easeOut),
+    );
+    _rightEyeX = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _eyeController, curve: Curves.easeOut),
+    );
+    _rightEyeY = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _eyeController, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _eyeController.dispose();
+    super.dispose();
+  }
+
+  void _updateEyePosition(Offset clickPosition, Size screenSize) {
+    const double catX = 50; // Cat's head X position from right edge
+    const double catY = 120; // Cat's head Y position from bottom
+    
+    // Calculate cat's actual position on screen
+    final double catScreenX = screenSize.width - catX;
+    final double catScreenY = screenSize.height - catY;
+    
+    // Calculate direction from cat to click
+    final double deltaX = clickPosition.dx - catScreenX;
+    final double deltaY = clickPosition.dy - catScreenY;
+    
+    // Calculate angle and limit eye movement
+    final double distance = math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const double maxEyeMovement = 3.0; // Maximum pixels the pupils can move
+    
+    double eyeX = 0;
+    double eyeY = 0;
+    
+    if (distance > 0) {
+      eyeX = (deltaX / distance) * maxEyeMovement;
+      eyeY = (deltaY / distance) * maxEyeMovement;
+      
+      // Clamp the values
+      eyeX = eyeX.clamp(-maxEyeMovement, maxEyeMovement);
+      eyeY = eyeY.clamp(-maxEyeMovement, maxEyeMovement);
+    }
+    
+    // Update animation targets
+    _leftEyeX = Tween<double>(
+      begin: _leftEyeX.value,
+      end: eyeX,
+    ).animate(CurvedAnimation(parent: _eyeController, curve: Curves.easeOut));
+    
+    _leftEyeY = Tween<double>(
+      begin: _leftEyeY.value,
+      end: eyeY,
+    ).animate(CurvedAnimation(parent: _eyeController, curve: Curves.easeOut));
+    
+    _rightEyeX = Tween<double>(
+      begin: _rightEyeX.value,
+      end: eyeX,
+    ).animate(CurvedAnimation(parent: _eyeController, curve: Curves.easeOut));
+    
+    _rightEyeY = Tween<double>(
+      begin: _rightEyeY.value,
+      end: eyeY,
+    ).animate(CurvedAnimation(parent: _eyeController, curve: Curves.easeOut));
+    
+    _eyeController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: GestureDetector(
+        onTapDown: (details) {
+          setState(() {
+            lastClickPosition = details.globalPosition;
+          });
+          _updateEyePosition(details.globalPosition, MediaQuery.of(context).size);
+        },
+        child: Stack(
+          children: [
+            // Main content
+            widget.child,
+            
+            // Interactive cat in bottom-right corner
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: AnimatedBuilder(
+                animation: _eyeController,
+                builder: (context, child) {
+                  return CustomPaint(
+                    size: const Size(100, 150),
+                    painter: InteractiveCatPainter(
+                      leftEyeOffset: Offset(_leftEyeX.value, _leftEyeY.value),
+                      rightEyeOffset: Offset(_rightEyeX.value, _rightEyeY.value),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class InteractiveCatPainter extends CustomPainter {
+  final Offset leftEyeOffset;
+  final Offset rightEyeOffset;
+  
+  InteractiveCatPainter({
+    required this.leftEyeOffset,
+    required this.rightEyeOffset,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint catPaint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.fill;
+    
+    final Paint eyeWhitePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    
+    final Paint pupilPaint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.fill;
+    
+    final Paint nosePaint = Paint()
+      ..color = Colors.pink.shade300
+      ..style = PaintingStyle.fill;
+
+    // Cat head (partial, peeking from corner)
+    final Path catHead = Path();
+    catHead.moveTo(size.width * 0.3, size.height); // Start from bottom
+    catHead.lineTo(size.width * 0.2, size.height * 0.7); // Left side
+    catHead.quadraticBezierTo(
+      size.width * 0.1, size.height * 0.5,
+      size.width * 0.3, size.height * 0.4,
+    ); // Left ear curve
+    catHead.lineTo(size.width * 0.4, size.height * 0.2); // Left ear tip
+    catHead.lineTo(size.width * 0.5, size.height * 0.4); // Between ears
+    catHead.lineTo(size.width * 0.6, size.height * 0.2); // Right ear tip
+    catHead.lineTo(size.width * 0.8, size.height * 0.4); // Right ear
+    catHead.quadraticBezierTo(
+      size.width * 0.9, size.height * 0.5,
+      size.width * 0.85, size.height * 0.7,
+    ); // Right side curve
+    catHead.lineTo(size.width, size.height); // To bottom-right corner
+    catHead.close();
+    
+    canvas.drawPath(catHead, catPaint);
+    
+    // Eyes (white part)
+    final double leftEyeCenterX = size.width * 0.4;
+    final double leftEyeCenterY = size.height * 0.55;
+    final double rightEyeCenterX = size.width * 0.6;
+    final double rightEyeCenterY = size.height * 0.55;
+    final double eyeRadius = size.width * 0.05;
+    
+    canvas.drawCircle(
+      Offset(leftEyeCenterX, leftEyeCenterY),
+      eyeRadius,
+      eyeWhitePaint,
+    );
+    canvas.drawCircle(
+      Offset(rightEyeCenterX, rightEyeCenterY),
+      eyeRadius,
+      eyeWhitePaint,
+    );
+    
+    // Pupils (following the click)
+    final double pupilRadius = eyeRadius * 0.6;
+    canvas.drawCircle(
+      Offset(leftEyeCenterX + leftEyeOffset.dx, leftEyeCenterY + leftEyeOffset.dy),
+      pupilRadius,
+      pupilPaint,
+    );
+    canvas.drawCircle(
+      Offset(rightEyeCenterX + rightEyeOffset.dx, rightEyeCenterY + rightEyeOffset.dy),
+      pupilRadius,
+      pupilPaint,
+    );
+    
+    // Nose
+    final Path nose = Path();
+    final double noseCenterX = size.width * 0.5;
+    final double noseCenterY = size.height * 0.7;
+    nose.moveTo(noseCenterX, noseCenterY - 3);
+    nose.lineTo(noseCenterX - 4, noseCenterY + 2);
+    nose.lineTo(noseCenterX + 4, noseCenterY + 2);
+    nose.close();
+    canvas.drawPath(nose, nosePaint);
+    
+    // Whiskers
+    final Paint whiskerPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    
+    // Left whiskers
+    canvas.drawLine(
+      Offset(size.width * 0.1, size.height * 0.65),
+      Offset(size.width * 0.35, size.height * 0.68),
+      whiskerPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.15, size.height * 0.75),
+      Offset(size.width * 0.38, size.height * 0.75),
+      whiskerPaint,
+    );
+    
+    // Right whiskers
+    canvas.drawLine(
+      Offset(size.width * 0.65, size.height * 0.68),
+      Offset(size.width * 0.9, size.height * 0.65),
+      whiskerPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.62, size.height * 0.75),
+      Offset(size.width * 0.85, size.height * 0.75),
+      whiskerPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(InteractiveCatPainter oldDelegate) {
+    return leftEyeOffset != oldDelegate.leftEyeOffset ||
+           rightEyeOffset != oldDelegate.rightEyeOffset;
   }
 }
 
@@ -82,7 +347,7 @@ class LandingPage extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const MainMenuPage(),
+                      builder: (context) => const InteractiveCatWrapper(child: MainMenuPage()),
                     ),
                   );
                 },
